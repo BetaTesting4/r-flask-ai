@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>R Code AI</title>
+    <style>
+        input[type="file"] {
+          display: none;
+        }
+        #inputContainer {
+            display: flex;
+            align-items: center; /* align items vertically */
+            padding: 10px;
+            border-top: 1px solid #ccc;
+            background-color: #fff;
+            gap: 10px; /* consistent spacing */
+        }
+
+        .custom-file-upload {
+            display: inline-block;
+            margin-left: 0; /* remove left margin */
+            font-size: 20px;
+            width: 24px;
+            height: auto;
+            cursor: pointer;
+        }
+
+        .loadingBubble {
+          font-style: italic;
+          color: #666;
+          margin: 10px 0;
+          font-size: 14px;
+          position: relative;
+          width: 80px;
+        }
+
+        .loadingBubble::after {
+          content: '';
+          animation: dots 1.5s steps(4, start) infinite;
+          position: absolute;
+          left: 100%; /* add dots after the word */
+          top: 0;
+          font-weight: bold;
+          font-size: 18px;
+          color: #999;
+          white-space: pre; /* preserve spacing */
+          padding-left: 5px; /* add space between text and dots */
+        }
+
+        @keyframes dots {
+          0% {
+            content: '';
+          }
+          25% {
+            content: '.';
+          }
+          50% {
+            content: '..';
+          }
+          75% {
+            content: '...';
+          }
+          100% {
+            content: '';
+          }
+        }
+        
+        .aiActions {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-start; /* or center or flex-end */
+        }
+
+        .aiActions button {
+            margin: 0;
+            background-color: #eee;
+            color: #111;
+            border: 1px solid #ccc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .aiActions button:hover {
+            background-color: #ddd;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #chatContainer {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .userMsg, .aiMsg {
+            margin: 10px 0;
+            padding: 10px 15px;
+            border-radius: 10px;
+            max-width: 80%;
+            white-space: pre-wrap;
+        }
+
+        .userMsg {
+            background-color: #dcf8c6;
+            align-self: flex-end;
+        }
+
+        .aiMsg {
+            background-color: #e3e3e3;
+            border-left: 4px solid #444;
+        }
+
+        #inputContainer {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+            background-color: #fff;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+
+        button {
+            margin-left: 10px;
+            padding: 10px 15px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        code {
+            font-family: monospace;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="chatContainer"></div>
+
+    <div id="inputContainer">
+        <label for="file-upload" class="custom-file-upload btn">
+            <img src="https://cdn-icons-png.flaticon.com/128/11895/11895573.png" width="40" height="40" alt="Upload File">
+        </label>
+        <input type="file" width="24" height="24" id="file-upload"/>
+        <input type="text" id="userInput" placeholder="Ask for R code..." onkeydown="if(event.key==='Enter')send()">
+        <button onclick="send()">Send</button>
+    </div>
+
+    <script>
+        document.getElementById("file-upload").addEventListener("change", async function () {
+            const file = this.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.result) {
+                appendMessage("ai", `📊 ${file.name} uploaded successfully and is now available.`);
+            } else {
+                appendMessage("ai", `<pre style="color: red;"><code>${data.error}</code></pre>`);
+            }
+        });
+
+        async function send() {
+            const input = document.getElementById("userInput");
+            const text = input.value.trim();
+            if (!text) return;
+
+            appendMessage("user", text);
+            input.value = "";
+
+            const chat = document.getElementById("chatContainer");
+            const loadingDiv = document.createElement("div");
+            loadingDiv.className = "loadingBubble";
+            loadingDiv.innerText = "thinking";
+            chat.appendChild(loadingDiv);
+
+            const res = await fetch("/analyze", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            });
+
+            const data = await res.json();
+            chat.removeChild(loadingDiv);
+            appendMessage("ai", formatCode(data.result));
+        }
+
+        function appendMessage(sender, message) {
+            const container = document.getElementById("chatContainer");
+            const div = document.createElement("div");
+            div.className = sender === "user" ? "userMsg" : "aiMsg";
+
+            if (sender === "ai") {
+                const contentDiv = document.createElement("div");
+                contentDiv.className = "aiContent";
+                contentDiv.innerHTML = message;
+
+                const actionsDiv = document.createElement("div");
+                actionsDiv.className = "aiActions";
+
+                const runBtn = document.createElement("button");
+                runBtn.textContent = "▶️ Run Code";
+                runBtn.addEventListener("click", () => runCode(message));
+
+                const regenBtn = document.createElement("button");
+                regenBtn.textContent = "🔄 Regenerate";
+                regenBtn.addEventListener("click", () => regenerate(regenBtn));
+
+                actionsDiv.appendChild(runBtn);
+                actionsDiv.appendChild(regenBtn);
+
+                div.appendChild(contentDiv);
+                div.appendChild(actionsDiv);
+            } else {
+                div.textContent = message;
+            }
+
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+
+        function formatCode(text) {
+            return text
+                .replace(/```r\\n?([\\s\\S]*?)```/g, "<pre><code>$1</code></pre>")  // format R code blocks
+                .replace(/\\n/g, "<br>"); // convert line breaks to <br> if needed
+        }
+
+        async function runCode(codeText) {
+            console.log("Running code:", codeText);
+            const chat = document.getElementById("chatContainer");
+            const loadingDiv = document.createElement("div");
+            loadingDiv.className = "loadingBubble";
+            loadingDiv.innerText = "running code; this will take a while";
+            chat.appendChild(loadingDiv);
+            chat.scrollTop = chat.scrollHeight;
+
+            await new Promise(requestAnimationFrame);
+
+            const res = await fetch("/runCode", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ code: codeText })
+            });
+
+            const data = await res.json();
+            chat.removeChild(loadingDiv);
+
+            if (data.output) {
+                appendMessage("code", `<pre><code>${data.output}</code></pre>`);
+            } else if (data.error) {
+                appendMessage("code", `<pre style="color: red;"><code>${data.error}</code></pre>`);
+            } else {
+                appendMessage("code", `<pre style="color: red;"><code>Unknown error occurred.</code></pre>`);
+            }
+        }
+
+
+    </script>
+</body>
+</html>
